@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+body { font: 12px Arial;}
+
+path { 
+  stroke: steelblue;
+  stroke-width: 2;
+  fill: none;
+}
+
+.axis path,
+.axis line {
+  fill: none;
+  stroke: grey;
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+</style>
+<body>
+<script type="text/javascript" src="http://cdnjs.cloudflare.com/ajax/libs/d3/3.4.1/d3.min.js"></script>
+
+<script>
+var margin = {top: 30, right: 150, bottom: 30, left: 50}, // Increase the right margin to fit
+  width = 750 - margin.left - margin.right,
+  height = 270 - margin.top - margin.bottom;
+
+var parseDate = d3.time.format("%d-%b-%y").parse;
+
+var strokeColor = ["steelblue", "red", "orange", "green"];
+
+var svg = d3.select("body")
+  .append("svg")
+    .attr("width", width + margin.left + margin.right)
+    .attr("height", height + margin.top + margin.bottom)
+  .append("g")
+    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+  
+
+
+var AxisView = function() {
+  return {
+
+    initialize: function(options) {
+      for(var key in options) {
+        this[key] = options[key];
+      }
+    },
+
+    setAxisScaleOrientation: function(ax) {
+      var ax;
+      if (this.x) { ax = this.x; }
+      if (this.y) { ax = this.y; }
+      return d3.svg.axis().scale(ax)
+          .orient(this.position).ticks(this.tick);
+    },
+
+    getValueLine : function(xFun, yFun, xAxisKey, yAxisKey) {
+      //to do: how can I get rid of the arguments????
+      return d3.svg.line()
+          .x(function(d) {return xFun.call(this, d[xAxisKey]); })
+          .y(function(d) {return yFun.call(this, d[yAxisKey]); })
+    }
+  };
+};
+
+
+var YAxisView = function(options) {
+
+  YAxisView.prototype.initialize.call(this, options);
+  this.getAxis = function() {
+    this.y = d3.scale.linear().range([this.height, 0]);
+    return this.y;
+  };
+  this.setDomain = function(data) {
+    return this.y.domain([0, d3.max(data, (function(d) {
+        return Math.max(d[this.axisKey]); 
+      }).bind(this)
+    )]);  
+  };
+
+};
+
+YAxisView.prototype = new AxisView();
+YAxisView.prototype.constructor = YAxisView;
+
+var XAxisView = function() {
+  XAxisView.prototype.initialize.apply(this, arguments);
+  this.getAxis = function() {
+    this.x = d3.time.scale().range([0, this.width]);
+    return this.x;
+
+  };
+
+  this.setDomain = function(data) {
+    return this.x.domain(d3.extent(data, (function(d) {
+        return d[this.axisKey];
+      }).bind(this)
+    ));
+    //need to bind this so that this.axisKey can work
+  };
+};
+XAxisView.prototype = new AxisView();
+
+d3.tsv("data/data2.tsv", function(error, data) {  // getting a different data file
+  data.forEach(function(d) {
+    d.date = parseDate(d.date);
+    d.close = +d.close;
+    d.sqrtopen = Math.sqrt(+d.open);
+    d.open = +d.open;
+    d.inverseopen = 1 / +d.open;
+  });
+  var axisKeys = Object.keys(data[0]);
+  //the key is no sorted, and is not corresponding to user behavior;
+  // sort(axisKeys);
+  var xAxisKey = 'date', xFun;
+
+  axisKeys.forEach(function(axisKey, i){
+    var axisView, axis, position, valueLine, yAxisKey, yFun, ywidth,
+        color = strokeColor[i];
+    if (axisKey === xAxisKey) {
+      axisView = new XAxisView({
+        axisKey : axisKey,
+        width : width,
+        position : 'bottom',
+        tick : 5
+      });
+      xFun = axisView.getAxis();
+      axis = axisView.setAxisScaleOrientation();
+      axisView.setDomain(data);
+      svg.append("g")           // Add the X Axis
+        .attr("class", "x axis")
+        .attr("transform", "translate(0," + height + ")")
+        .call(axis);
+
+    } else {
+      yAxisKey = axisKey;
+      if (axisKey === 'close' ) {
+        position = 'left';
+        ywidth = 0;
+      } else {
+        position = 'right';
+        ywidth = width;
+      }
+      axisView = new YAxisView({
+        axisKey : axisKey,
+        height : height,
+        position : position,
+        tick : 5
+      });
+
+      yFun = axisView.getAxis();
+    //call each getAxis function so this.x, this.y is defined
+      axis = axisView.setAxisScaleOrientation();
+      valueLine = axisView.getValueLine(xFun, yFun, xAxisKey, yAxisKey);
+      axisView.setDomain(data);
+      svg.append("path")          // Add the valueLine2 path.
+        .attr("class", "line")
+        .style("stroke", color)
+        .attr("d", valueLine(data));
+      debugger;
+      console.log(ywidth + 50 * (i-1) );
+      svg.append("g")           // Add the Y Axis Right
+        .attr("class", "y axis")    // Add the Y Axis Right
+        .attr("transform", "translate(" + width + 50 * (i-1) + " ,0)") // move to the right
+        .style("fill", "red")     // make text red
+        .call(axis);
+  
+      svg.append("text")
+          .attr("class", "y label")
+          .attr("text-anchor", "middle")
+          .attr("y", 6)
+          .attr("dy", ".75em")
+          .attr("transform", "translate("+(ywidth+68 *(i-1)) + " , " + (height/2) +") rotate(-90)")
+          .text("lots of gas (boe)");
+    }
+
+
+  });
+
+});
+</script>
+</body>
